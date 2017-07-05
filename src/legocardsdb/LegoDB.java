@@ -38,7 +38,7 @@ public class LegoDB {
 			"Pirate Captain", "Hula Dancer", "Create! Ancient Ship", "Lily", "Sam"};
 	
 	public LegoDB(){
-		
+		connectToDB();
 	}
 
     public void connectToDB() {
@@ -97,7 +97,13 @@ public class LegoDB {
         			"CREATE TABLE Cards("
         			+ "cid serial PRIMARY KEY,"
         			+ "name varchar(255) NOT NULL,"
-        			+ "quantity smallint DEFAULT 0);");
+        			+ "quantity smallint DEFAULT 0);"
+        			+ "CREATE TABLE People("
+        			+ "pid serial PRIMARY KEY,"
+        			+ "name varchar(255) NOT NULL);"
+        			+ "CREATE TABLE Orders("
+        			+ "cid serial references Cards(cid),"
+        			+ "pid serial references People(pid));");
         	createTables.execute();
         	System.out.println("Table created");
         } catch (SQLException sqlE){
@@ -131,30 +137,82 @@ public class LegoDB {
         		System.out.println(count + ": " + quantity);
         		count++;
         	}
-        } catch (SQLException sqlE)
-        { System.out.println("SQL code is broken");
-        
+        } catch (SQLException sqlE){
+        	System.out.println("SQL code is broken");
+        	sqlE.printStackTrace();
         }
     }
     
-    public void getStatus(int cid){
+    public String getStatus(int cid){
     	try {
         	PreparedStatement quantityQuery = conn.prepareStatement(
         		"SELECT name, quantity FROM Cards WHERE cid = " + cid + ";");
         
         	ResultSet rs = quantityQuery.executeQuery();
-        
+        	String result = "<html>";
+        	
         	while (rs.next()) {
         		String name = rs.getString("name");
         		String quantity = rs.getString("quantity");
-        		System.out.println("No: " + cid);
-        		System.out.println("Name: " + name);
-        		System.out.println("Quantity: " + quantity);
+        		result += "No: " + cid + "<br>";
+        		result += "Name: " + name + "<br>";
+        		result += "Quantity: " + quantity + "</html>";
+        		return result;
         	}
-        } catch (SQLException sqlE)
-        { System.out.println("SQL code is broken");
-        
+        } catch (SQLException sqlE){
+        	System.out.println("Can't find card " + cid);
+			sqlE.printStackTrace();
         }
+    	return "Can't find card " + cid;
+    }
+    
+    public String getStatus(String name){
+    	for(int i = 0; i < cards.length; i++){
+    		if(cards[i].equals(name)){
+    			return getStatus(i+1);
+    		}
+    	}
+    	return "Card not found";
+    }
+    
+    public int getCID(String name){
+    	for(int i = 0; i < cards.length; i++){
+    		if(cards[i].equals(name)){
+    			return i+1;
+    		}
+    	}
+    	return -1;
+    }
+    
+    public boolean checkName(String name){
+    	for(int i = 0; i < cards.length; i++){
+    		if(cards[i].equals(name)){
+    			return true;
+    		}
+    	}
+    	return false;
+    }
+    
+    public String missingCards(){
+    	try {
+        	PreparedStatement quantityQuery = conn.prepareStatement(
+        		"SELECT name, cid FROM Cards WHERE quantity = 0 ORDER BY cid ASC;");
+        	ResultSet rs = quantityQuery.executeQuery();
+        	String result = "<html>";
+        	
+        	while (rs.next()) {
+        		String name = rs.getString("name");
+        		String cid = rs.getString("cid");
+        		result += cid + ": " + name + "<br>";
+        	}
+        	result += "</html>";
+        	return result;
+        	
+        } catch (SQLException sqlE){
+        	System.out.println("Something went bad");
+			sqlE.printStackTrace();
+        }
+    	return "";
     }
     
     public void addCard(int cid){
@@ -177,5 +235,186 @@ public class LegoDB {
 			System.out.println("Failed to remove card");
 			e.printStackTrace();
 		}
+    }
+    
+    public String[] getPeople(){
+    	try {
+    		PreparedStatement quantityQuery = conn.prepareStatement(
+    			"SELECT COUNT(name) AS total FROM People;");
+    		
+    		ResultSet rs1 = quantityQuery.executeQuery();
+    		rs1.next();
+    		int total = rs1.getInt("total");
+    		String[] people = new String[total];
+    		
+        	PreparedStatement namesQuery = conn.prepareStatement(
+        		"SELECT name FROM People;");
+        
+        	ResultSet rs2 = namesQuery.executeQuery();
+        	
+        	int counter = 0;
+        	while (rs2.next()) {
+        		String name = rs2.getString("name");
+        		people[counter] = name;
+        		counter++;
+        	}
+        	
+        	return people;
+        			
+        } catch (SQLException sqlE){
+        	System.out.println("It's all gone wrong");
+			sqlE.printStackTrace();
+        }
+    	return new String[0];
+    }
+    
+    public String getPeopleView(){
+    	try {
+    		PreparedStatement peopleQuery = conn.prepareStatement(
+        		"SELECT pid, name FROM People;");
+        
+        	ResultSet rs = peopleQuery.executeQuery();
+        	
+        	String result = "<html>";
+        	
+        	while (rs.next()) {
+        		String name = rs.getString("name");
+        		String pid = rs.getString("pid");
+        		result += pid + ": " + name + "<br>";
+        	}
+        	result += "</html>";
+        	return result;
+        			
+        } catch (SQLException sqlE){
+        	System.out.println("It's all gone wrong");
+			sqlE.printStackTrace();
+        }
+    	return "";
+    }
+    
+    public int getPID(String name){
+    	try {
+        	PreparedStatement nameQuery = conn.prepareStatement(
+        		"SELECT pid FROM People WHERE name = '" + name + "';");
+        
+        	ResultSet rs = nameQuery.executeQuery();
+        	rs.next();
+        	int pid = rs.getInt("pid");
+        	
+        	return pid;
+        			
+        } catch (SQLException sqlE){
+        	System.out.println("Could not find " + name);
+			sqlE.printStackTrace();
+        }
+    	return -1;
+    }
+    
+    public void addOrder(String name, String card){
+    	try {
+    		int pid = getPID(name);
+    		int cid = getCID(card);
+    		
+        	PreparedStatement insertQuery = conn.prepareStatement(
+        		"INSERT INTO Orders (cid, pid) VALUES ('" + cid + "', '" + pid + "');");
+        	insertQuery.execute();
+        	
+        } catch (SQLException sqlE){
+        	System.out.println("Could not insert " + name + " and " + card);
+			sqlE.printStackTrace();
+        }
+    }
+    
+    public void removeOrder(String name, String card){
+    	try {
+    		int pid = getPID(name);
+    		int cid = getCID(card);
+    		
+        	PreparedStatement removeQuery = conn.prepareStatement(
+        		"DELETE FROM Orders WHERE cid = " + cid + " AND pid = " + pid + ";");
+        	removeQuery.execute();
+        	
+        } catch (SQLException sqlE){
+        	System.out.println("Could not remove " + name + " and " + card);
+			sqlE.printStackTrace();
+        }
+    }
+    
+    public String[] getCards(){
+    	return cards;
+    }
+    
+    public void addPerson(String name){
+    	try {
+			PreparedStatement insertPerson = conn.prepareStatement(
+					"INSERT INTO People (name) VALUES ('" + name + "');");
+			insertPerson.execute();
+		} catch (SQLException e) {
+			System.out.println("Insertion of person " + name + " failed");
+			e.printStackTrace();
+		}
+    }
+    
+    public String getOrders(String name){
+    	try {
+    		PreparedStatement orderQuery = conn.prepareStatement(
+        		"SELECT Cards.cid, Cards.name, quantity FROM Cards "
+        		+ "INNER JOIN Orders ON Cards.cid = Orders.cid "
+        		+ "INNER JOIN People ON Orders.pid = People.pid "
+        		+ "WHERE People.name = '" + name + "';");
+        
+        	ResultSet rs = orderQuery.executeQuery();
+        	
+        	String result = "<html>";
+        	
+        	while (rs.next()) {
+        		String cid = rs.getString("cid");
+        		String cname = rs.getString("name");
+        		String quantity = rs.getString("quantity");
+        		result += cid + ": " + cname + " [" + quantity + "]<br>";
+        	}
+        	result += "</html>";
+        	return result;
+        			
+        } catch (SQLException sqlE){
+        	System.out.println("It's all gone wrong");
+			sqlE.printStackTrace();
+        }
+    	return "";
+    }
+    
+    public String[] checkOrders(int cid){
+    	try {
+    		PreparedStatement amountQuery = conn.prepareStatement(
+    			"SELECT count(pid) FROM Orders WHERE cid =" + cid + ";");
+    		
+    		ResultSet rs1 = amountQuery.executeQuery();
+    		rs1.next();
+    		int count = rs1.getInt("count");
+    		
+    		if(count == 0){
+    			return new String[0];
+    		}
+    		else{
+	    		PreparedStatement orderQuery = conn.prepareStatement(
+	        		"SELECT name FROM People "
+	        		+ "INNER JOIN Orders ON People.pid = Orders.pid "
+	        		+ "WHERE cid =" + cid + ";");
+	        
+	        	ResultSet rs2 = orderQuery.executeQuery();
+	        	String[] people = new String[count];
+	        	int i = 0;
+	        	
+	        	while(rs2.next()){
+	        		people[i] = rs2.getString("name");
+	        		i++;
+	        	}
+	        	return people;
+    		}	
+        } catch (SQLException sqlE){
+        	System.out.println("It's all gone wrong");
+			sqlE.printStackTrace();
+        }
+    	return new String[0];
     }
 }
